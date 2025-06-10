@@ -22,40 +22,79 @@ def parse_excel_data(file_path):
         return f"Error: Could not open or process the Excel file. Details: {e}"
 
     sheet = workbook.active
-    headers = [cell.value for cell in sheet[1]]  # Get header row
+    raw_headers = [cell.value for cell in sheet[1]] # Get header row
 
-    required_header_names = ['Test Case ID', 'Description', 'Expected Outcome']
-    present_headers = {header: False for header in required_header_names}
+    # Normalize headers to lower case for case-insensitive matching
+    headers = [str(h).lower() if h is not None else "" for h in raw_headers]
+
+    # Define expected headers (core and optional)
+    # Using lowercase for matching against normalized headers
+    core_expected_headers = {
+        'test case id': 'Test Case ID', # value is the key we'll use in the output dict
+        'description': 'Description',
+        'expected outcome': 'Expected Outcome'
+    }
+    optional_expected_headers = {
+        'category': 'Category',
+        'priority': 'Priority',
+        'tags': 'Tags'
+    }
 
     header_to_column_index = {}
+    # Map core headers
+    for h_lower, h_actual_key in core_expected_headers.items():
+        try:
+            header_to_column_index[h_actual_key] = headers.index(h_lower) + 1 # openpyxl is 1-indexed
+        except ValueError:
+            # A core header is missing
+            missing_core_headers_display = [core_expected_headers[lh] for lh in core_expected_headers if lh not in headers]
+            return f"Error: Missing required columns. Ensure {', '.join(f\"'{h}'\" for h in missing_core_headers_display)} columns are present."
 
-    for col_idx, header_value in enumerate(headers):
-        if header_value in present_headers:
-            present_headers[header_value] = True
-            header_to_column_index[header_value] = col_idx + 1 # openpyxl is 1-indexed
-
-    missing_headers = [header for header, is_present in present_headers.items() if not is_present]
-    if missing_headers:
-        return f"Error: Missing required columns. Ensure {', '.join(f\"'{h}'\" for h in required_header_names)} columns are present."
+    # Map optional headers
+    for h_lower, h_actual_key in optional_expected_headers.items():
+        try:
+            header_to_column_index[h_actual_key] = headers.index(h_lower) + 1 # openpyxl is 1-indexed
+        except ValueError:
+            # Optional header is not present, that's fine. We won't add it to header_to_column_index.
+            pass
 
     parsed_test_cases = []
     for row_num in range(2, sheet.max_row + 1):  # Start from row 2 (skip header)
-        test_case_id = sheet.cell(row=row_num, column=header_to_column_index['Test Case ID']).value
-        description = sheet.cell(row=row_num, column=header_to_column_index['Description']).value
-        expected_outcome = sheet.cell(row=row_num, column=header_to_column_index['Expected Outcome']).value
+        test_case_data = {}
 
+        # Extract core fields
+        test_case_id = sheet.cell(row=row_num, column=header_to_column_index['Test Case ID']).value
         # Basic validation: ensure Test Case ID is present
         if not test_case_id:
-            # Skip rows where Test Case ID is missing (or log as appropriate)
-            continue
+            continue # Skip rows where Test Case ID is missing
 
-        test_case = {
-            'Test Case ID': test_case_id,
-            'Description': description,
-            'Expected Outcome': expected_outcome
-            # 'Optional Parameters' will be handled in a future implementation.
-        }
-        parsed_test_cases.append(test_case)
+        test_case_data['Test Case ID'] = test_case_id
+        test_case_data['Description'] = sheet.cell(row=row_num, column=header_to_column_index['Description']).value
+        test_case_data['Expected Outcome'] = sheet.cell(row=row_num, column=header_to_column_index['Expected Outcome']).value
+
+        # Extract optional fields if their columns were found
+        if 'Category' in header_to_column_index:
+            test_case_data['Category'] = sheet.cell(row=row_num, column=header_to_column_index['Category']).value
+        else:
+            test_case_data['Category'] = None
+
+        if 'Priority' in header_to_column_index:
+            test_case_data['Priority'] = sheet.cell(row=row_num, column=header_to_column_index['Priority']).value
+        else:
+            test_case_data['Priority'] = None
+
+        if 'Tags' in header_to_column_index:
+            tags_value = sheet.cell(row=row_num, column=header_to_column_index['Tags']).value
+            if isinstance(tags_value, str):
+                test_case_data['Tags'] = [tag.strip() for tag in tags_value.split(',') if tag.strip()]
+            elif tags_value is None: # Cell is empty
+                 test_case_data['Tags'] = []
+            else: # E.g. if it's a number or other type, convert to string then process, or handle as error/default
+                test_case_data['Tags'] = [str(tags_value).strip()] if str(tags_value).strip() else []
+        else:
+            test_case_data['Tags'] = [] # Default to empty list if 'Tags' column is missing
+
+        parsed_test_cases.append(test_case_data)
 
     return parsed_test_cases
 

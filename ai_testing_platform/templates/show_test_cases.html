@@ -50,8 +50,15 @@
             <label for="filter_description_keyword">Description Keyword:</label>
             <input type="text" id="filter_description_keyword" name="filter_description_keyword" value="{{ filter_description_keyword or '' }}" style="margin-right: 10px; padding: 5px; border-radius: 3px; border: 1px solid #ccc;">
 
-            <input type="submit" value="Filter" style="padding: 6px 12px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-             <a href="{{ url_for('web_interface.show_test_cases') }}" style="text-decoration: none; padding: 6px 12px; background-color: #6c757d; color: white; border-radius: 4px; margin-left: 5px;">Clear Filters</a>
+            <br style="margin-bottom: 10px;">
+            <label for="filter_category" style="margin-top:10px; display:inline-block;">Category:</label>
+            <input type="text" id="filter_category" name="filter_category" value="{{ filter_category or '' }}" style="margin-right: 10px; padding: 5px; border-radius: 3px; border: 1px solid #ccc;">
+
+            <label for="filter_priority">Priority:</label>
+            <input type="text" id="filter_priority" name="filter_priority" value="{{ filter_priority or '' }}" style="margin-right: 10px; padding: 5px; border-radius: 3px; border: 1px solid #ccc;">
+
+            <input type="submit" value="Filter" style="padding: 6px 12px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; vertical-align: middle;">
+            <a href="{{ url_for('web_interface.show_test_cases') }}" style="text-decoration: none; padding: 6px 12px; background-color: #6c757d; color: white; border-radius: 4px; margin-left: 5px; vertical-align: middle;">Clear Filters</a>
         </form>
 
         <h2>Loaded Test Cases</h2>
@@ -63,14 +70,24 @@
                         <th>Test Case ID</th>
                         <th>Description</th>
                         <th>Expected Outcome</th>
+                        <th>Category</th>
+                        <th>Priority</th>
+                        <th>Tags</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for case in test_cases %}
+                    {% for tc in test_cases %}  {# tc is a dictionary from TestCase.to_dict() #}
                     <tr>
-                        <td>{{ case['Test Case ID'] }}</td>
-                        <td>{{ case['Description'] }}</td>
-                        <td>{{ case['Expected Outcome'] }}</td>
+                        <td>{{ tc.get('Test Case ID', '') }}</td>
+                        <td>{{ tc.get('Description', '') }}</td>
+                        <td>{{ tc.get('Expected Outcome', '') }}</td>
+                        <td>{{ tc.get('Category', '') }}</td>
+                        <td>{{ tc.get('Priority', '') }}</td>
+                        <td>{{ tc.get('Tags', []) | join(', ') }}</td>
+                        <td>
+                            <a href="{{ url_for('web_interface.run_test', test_case_id=tc['Test Case ID']) }}" class="button-link" style="padding: 5px 10px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 4px;">Run Test</a>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

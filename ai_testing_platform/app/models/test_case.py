@@ -21,7 +21,7 @@ class TestCase(db.Model):
             'Test Case ID': self.id, # Match Excel header for consistency in display
             'Description': self.description,
             'Expected Outcome': self.expected_outcome,
-            'Category': self.category,
-            'Priority': self.priority,
-            'Tags': self.tags
+            'Category': self.category if self.category is not None else '', # Default to empty string if None
+            'Priority': self.priority if self.priority is not None else '', # Default to empty string if None
+            'Tags': self.tags if self.tags else [] # Ensure tags is a list, default to empty list
         }

@@ -8,6 +8,11 @@ db = SQLAlchemy()
 def create_app():
     app = Flask(__name__, instance_relative_config=True)
 
+    # Secret Key for session management
+    # In a production environment, use a strong, randomly generated key,
+    # and preferably load it from an environment variable or a config file.
+    app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev_default_secret_key_123!@#')
+
     # Configure Upload Folder
     # app.root_path is ai_testing_platform/app
     # os.path.abspath(os.path.join(app.root_path, '..', 'uploads')) ensures it's an absolute path
