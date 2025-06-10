@@ -109,145 +109,219 @@ class AIConnector:
             logger.warning("Input validation failed: API endpoint or API key is missing.")
             return False
 
-    def start_conversation(self, test_case_description: str) -> dict:
+    def send_messages_to_llm(self, messages: list) -> dict:
         """
-        Starts a new conversation with the (mock) AI using the test case description.
+        Sends a list of messages (representing conversation history) to the LLM.
 
         Args:
-            test_case_description (str): The description of the test case to initiate conversation.
+            messages (list): A list of message dictionaries, e.g.,
+                             [{"role": "user", "content": "Hello"},
+                              {"role": "assistant", "content": "Hi there!"}]
 
         Returns:
             dict: A dictionary containing the status of the operation and AI's response.
         """
         config = self.load_config()
         api_key = config.get('api_key')
-        # The `api_endpoint` from config might be used as `base_url` if provided for OpenAI,
-        # or it could be intended for a different AI type entirely.
-        # For this specific OpenAI integration, we'll prioritize the api_key.
-        # If a custom base_url is needed for OpenAI (e.g. proxy), it should be handled here.
-        configured_base_url = config.get('api_endpoint') # User-defined base URL from config
+        configured_base_url = config.get('api_endpoint')
 
         if not api_key:
-            logger.warning("OpenAI API key not configured. Cannot start conversation.")
+            logger.warning("OpenAI API key not configured. Cannot send messages.")
             return {"status": "error", "message": "OpenAI API key not configured. Please configure API key first."}
 
+        if not messages:
+            logger.warning("No messages provided to send_messages_to_llm.")
+            return {"status": "error", "message": "No messages provided."}
+
         try:
-            logger.info(f"Attempting to start conversation with OpenAI model gpt-3.5-turbo.")
-            logger.info(f"Test case description: '{test_case_description}'")
+            logger.info(f"Sending {len(messages)} messages to OpenAI model gpt-3.5-turbo.")
+            # Log the last message content for context, or a summary
+            if messages:
+                 logger.info(f"Last message role: {messages[-1].get('role')}, content snippet: '{str(messages[-1].get('content'))[:100]}...'")
+
             if configured_base_url:
                 logger.info(f"Using custom base URL: {configured_base_url}")
                 client = OpenAI(api_key=api_key, base_url=configured_base_url)
             else:
                 client = OpenAI(api_key=api_key)
 
-
             completion = client.chat.completions.create(
-                model="gpt-3.5-turbo",  # Or another suitable model like gpt-4
-                messages=[
-                    {"role": "user", "content": test_case_description}
-                ]
+                model="gpt-3.5-turbo",
+                messages=messages # Pass the whole conversation history
             )
 
             llm_response_content = completion.choices[0].message.content
-            conversation_id = completion.id  # The ID of the completion object
+            # The 'id' of the completion can serve as a general interaction ID,
+            # but a true 'conversation_id' might need to be managed externally if not part of the completion object for multi-turn.
+            # For now, using completion.id is fine for identifying this specific exchange.
+            interaction_id = completion.id
 
-            logger.info(f"OpenAI response received. Conversation ID: {conversation_id}")
+            logger.info(f"OpenAI response received. Interaction ID: {interaction_id}")
 
             return {
                 "status": "success",
                 "message_from_ai": llm_response_content,
-                "conversation_id": conversation_id,
-                "raw_response": completion.model_dump_json(indent=2), # For debugging
-                "api_endpoint_used": client.base_url # Show actual base URL used
+                "interaction_id": interaction_id, # Renamed from conversation_id for clarity this is for one exchange
+                "raw_response": completion.model_dump_json(indent=2),
+                "api_endpoint_used": str(client.base_url) # Ensure it's a string
             }
         except openai.APIConnectionError as e:
             logger.error(f"OpenAI API Connection Error: {e}")
-            return {"status": "error", "message": f"OpenAI API Connection Error: {e}"}
+            return {"status": "error", "message": f"OpenAI API Connection Error: {str(e)}"}
         except openai.RateLimitError as e:
             logger.error(f"OpenAI API Rate Limit Error: {e}")
-            return {"status": "error", "message": f"OpenAI API Rate Limit Error: {e}"}
+            return {"status": "error", "message": f"OpenAI API Rate Limit Error: {str(e)}"}
         except openai.APIStatusError as e:
             logger.error(f"OpenAI API Status Error: {e.status_code} - {e.response}")
-            return {"status": "error", "message": f"OpenAI API Status Error: {e.status_code} - {e.response}"}
+            return {"status": "error", "message": f"OpenAI API Status Error: {e.status_code} - {str(e.response)}"}
         except Exception as e:
             logger.error(f"An unexpected error occurred with OpenAI: {e}")
-            return {"status": "error", "message": f"An unexpected error occurred with OpenAI: {e}"}
+            return {"status": "error", "message": f"An unexpected error occurred with OpenAI: {str(e)}"}
 
 
 if __name__ == '__main__':
-    # Example Usage (demonstrates save and load AND actual API call if key is configured)
-    connector = AIConnector() # This will create ../../instance if it doesn't exist
-
+    # Example Usage
+    connector = AIConnector()
     print("--- Initial: Load config (file might not exist yet) ---")
-    initial_config = connector.load_config()
-    print(f"Loaded config: {initial_config}")
+    # Ensure config.json exists and has a valid API key for testing
+    # You might need to create/update instance/config.json manually with your OpenAI key
+    # e.g., {"api_endpoint": "https://api.openai.com/v1", "api_key": "sk-YOUR_KEY_HERE"}
 
-    print("\n--- Test Case 1: Save and Load Valid Credentials ---")
-    test_endpoint = "https://api.example.ai/v1/test"
-    test_key = "test_api_key_123456789_xyz"
-    print(f"Saving: Endpoint='{test_endpoint}', Key='{test_key}'")
-    save_status = connector.save_config(test_endpoint, test_key)
-    print(f"Save status: {save_status}")
-
-    loaded_config = connector.load_config()
-    print(f"Loaded config after save: {loaded_config}")
-    assert loaded_config.get('api_endpoint') == test_endpoint
-    assert loaded_config.get('api_key') == test_key
-
-    print("\n--- Test Case 2: Check Connection (Input Validation) ---")
-    # This uses the check_connection method which is for form input validation
-    check_result = connector.check_connection(test_endpoint, test_key)
-    print(f"Input validation check result (valid): {check_result}")
-    check_result_invalid = connector.check_connection(test_endpoint, "")
-    print(f"Input validation check result (invalid key): {check_result_invalid}")
-
-    print("\n--- Test Case 3: Overwrite config with new values ---")
-    new_endpoint = "https://api.new.ai/v2"
-    new_key = "new_key_for_testing_000"
-    print(f"Saving: Endpoint='{new_endpoint}', Key='{new_key}'")
-    connector.save_config(new_endpoint, new_key)
-    loaded_config_new = connector.load_config()
-    print(f"Loaded config after new save: {loaded_config_new}")
-    assert loaded_config_new.get('api_endpoint') == new_endpoint
-    assert loaded_config_new.get('api_key') == new_key
-
-    print("\n--- Test Case 4: Start Conversation (Live OpenAI Call if configured) ---")
-    # Ensure your instance/config.json has a valid api_key (and optionally api_endpoint for base_url)
-    # For example:
-    # {
-    #    "api_endpoint": "https://api.openai.com/v1", // or your proxy
-    #    "api_key": "sk-YOUR_REAL_API_KEY_HERE"
-    # }
-    # If you haven't run the save config tests above, create instance/config.json manually for this test.
-
-    # First, ensure there's some config (even if it's from previous test runs)
     if not os.path.exists(CONFIG_FILE_PATH) or not connector.load_config().get('api_key'):
-        print("Config file or API key is missing. Attempting to save a placeholder.")
+        print("Config file or API key is missing. Saving a placeholder.")
         print("Please edit instance/config.json with your actual OpenAI API key to test live calls.")
-        connector.save_config("https_api.openai.com_v1_placeholder", "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") # Replace with your actual endpoint and key in the file
-
-    desc1 = "Tell me a short, funny joke about programming."
-    print(f"\nStarting conversation with description: '{desc1}'")
-    conv_response1 = connector.start_conversation(desc1)
-    print(f"Conversation 1 response status: {conv_response1.get('status')}")
-    print(f"Message from AI: {conv_response1.get('message_from_ai')}")
-    if conv_response1.get('status') == 'error':
-        print(f"Error details: {conv_response1.get('message')}")
-    # Basic assertion: if successful, there should be a message.
-    # assert conv_response1.get('status') != 'error' or (conv_response1.get('status') == 'error' and "key not configured" in conv_response1.get('message',''))
+        connector.save_config("https://api.openai.com/v1", "sk-YOUR_OPENAI_API_KEY_HERE")
 
 
-    print("\n--- Test Case 5: Start Conversation with explicitly Unconfigured API Key ---")
-    current_config = connector.load_config() # Save current config
-    connector.save_config(current_config.get("api_endpoint",""), "") # Save empty API key
-    unconfigured_response = connector.start_conversation("Hello AI, are you there?")
-    print(f"Unconfigured AI response status: {unconfigured_response.get('status')}")
-    print(f"Message: {unconfigured_response.get('message')}")
-    assert unconfigured_response['status'] == 'error'
-    assert "API key not configured" in unconfigured_response['message']
+    print("\n--- Test: Send single message ---")
+    messages1 = [{"role": "user", "content": "What's the weather like in London today?"}]
+    response1 = connector.send_messages_to_llm(messages1)
+    print(f"Response 1 Status: {response1.get('status')}")
+    if response1.get('status') == 'success':
+        print(f"AI Message: {response1.get('message_from_ai')}")
+    else:
+        print(f"Error: {response1.get('message')}")
 
-    # Restore previous config if it existed
-    if current_config.get("api_key"):
-         connector.save_config(current_config.get("api_endpoint",""), current_config.get("api_key",""))
+    print("\n--- Test: Send conversation history ---")
+    messages2 = [
+        {"role": "user", "content": "What is the capital of France?"},
+        {"role": "assistant", "content": "The capital of France is Paris."},
+        {"role": "user", "content": "What is a famous landmark there?"}
+    ]
+    response2 = connector.send_messages_to_llm(messages2)
+    print(f"Response 2 Status: {response2.get('status')}")
+    if response2.get('status') == 'success':
+        print(f"AI Message: {response2.get('message_from_ai')}")
+    else:
+        print(f"Error: {response2.get('message')}")
 
+    print("\n--- Test: Send with unconfigured API key ---")
+    # Temporarily save an empty API key
+    original_config = connector.load_config()
+    connector.save_config(original_config.get('api_endpoint', ''), '') # Empty key
+
+    response_unconfigured = connector.send_messages_to_llm([{"role": "user", "content": "Test"}])
+    print(f"Unconfigured Response Status: {response_unconfigured.get('status')}")
+    print(f"Message: {response_unconfigured.get('message')}")
+    assert response_unconfigured.get('status') == 'error'
+
+    # Restore original config
+    if 'original_config' in locals() and original_config.get('api_key'): # ensure original_config was defined
+        connector.save_config(original_config.get('api_endpoint', ''), original_config.get('api_key', ''))
     print("\nTesting complete. Check 'instance/config.json'.")
+
+
+    def evaluate_conversation(self, conversation_history: list, expected_outcome: str, test_case_description: str) -> dict:
+        """
+        Evaluates a conversation against an expected outcome using an LLM.
+
+        Args:
+            conversation_history (list): The history of the conversation.
+            expected_outcome (str): The expected outcome of the test case.
+            test_case_description (str): The original description of the test case.
+
+        Returns:
+            dict: A dictionary containing the evaluation status, verdict, reasoning, and raw response.
+        """
+        config = self.load_config()
+        api_key = config.get('api_key')
+        configured_base_url = config.get('api_endpoint')
+
+        if not api_key:
+            logger.warning("OpenAI API key not configured. Cannot perform evaluation.")
+            return {"status": "error", "message": "OpenAI API key not configured. Please configure API key first."}
+
+        if not conversation_history:
+            logger.warning("Conversation history is empty. Cannot perform evaluation.")
+            return {"status": "error", "message": "Conversation history is empty."}
+
+        # Construct the prompt for the LLM evaluator
+        formatted_history = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in conversation_history])
+
+        evaluation_prompt_content = (
+            f"You are an AI Test Evaluator. Based on the provided information, please evaluate the conversation.\n\n"
+            f"Test Case Description:\n{test_case_description}\n\n"
+            f"Expected Outcome:\n{expected_outcome}\n\n"
+            f"Conversation History:\n{formatted_history}\n\n"
+            f"Instructions: Provide a verdict ('Pass', 'Fail', or 'Inconclusive') and a concise reasoning for this verdict. "
+            f"Structure your response *exactly* as follows, with each part on a new line:\n"
+            f"Verdict: [Your Verdict Here]\n"
+            f"Reasoning: [Your Reasoning Here]"
+        )
+
+        messages_for_eval_llm = [{"role": "user", "content": evaluation_prompt_content}]
+
+        try:
+            logger.info(f"Sending conversation for evaluation with prompt: {evaluation_prompt_content[:200]}...") # Log snippet
+
+            if configured_base_url:
+                client = OpenAI(api_key=api_key, base_url=configured_base_url)
+            else:
+                client = OpenAI(api_key=api_key)
+
+            completion = client.chat.completions.create(
+                model="gpt-3.5-turbo", # Or a more capable model if needed for better evaluation
+                messages=messages_for_eval_llm,
+                temperature=0.2 # Lower temperature for more deterministic evaluation
+            )
+
+            llm_raw_response_content = completion.choices[0].message.content
+            logger.info(f"Raw evaluation response from LLM: {llm_raw_response_content}")
+
+            # Parse the LLM's response string
+            extracted_verdict = "Inconclusive (Parsing Failed)"
+            extracted_reasoning = "Could not parse verdict and reasoning from LLM response."
+
+            verdict_found = False
+            reasoning_found = False
+
+            lines = llm_raw_response_content.strip().split('\n')
+            for line in lines:
+                if line.lower().startswith("verdict:"):
+                    extracted_verdict = line.split(":", 1)[1].strip()
+                    verdict_found = True
+                elif line.lower().startswith("reasoning:"):
+                    extracted_reasoning = line.split(":", 1)[1].strip()
+                    reasoning_found = True
+
+            if not verdict_found and not reasoning_found and llm_raw_response_content:
+                # If keywords aren't found but there's content, use the whole content as reasoning.
+                # This can happen if the LLM doesn't follow formatting instructions perfectly.
+                extracted_reasoning = f"LLM did not follow formatting. Raw response: {llm_raw_response_content}"
+
+
+            return {
+                "status": "success",
+                "verdict": extracted_verdict,
+                "reasoning": extracted_reasoning,
+                "raw_eval_response": llm_raw_response_content,
+                "api_endpoint_used": str(client.base_url)
+            }
+        except openai.APIConnectionError as e:
+            return {"status": "error", "message": f"OpenAI API Connection Error during evaluation: {str(e)}"}
+        except openai.RateLimitError as e:
+            return {"status": "error", "message": f"OpenAI API Rate Limit Error during evaluation: {str(e)}"}
+        except openai.APIStatusError as e:
+            return {"status": "error", "message": f"OpenAI API Status Error during evaluation: {e.status_code} - {str(e.response)}"}
+        except Exception as e:
+            return {"status": "error", "message": f"An unexpected error occurred during LLM evaluation: {str(e)}"}

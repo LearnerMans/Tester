@@ -73,6 +73,7 @@
                         <th>Category</th>
                         <th>Priority</th>
                         <th>Tags</th>
+                        <th>Last Verdict</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -85,6 +86,18 @@
                         <td>{{ tc.get('Category', '') }}</td>
                         <td>{{ tc.get('Priority', '') }}</td>
                         <td>{{ tc.get('Tags', []) | join(', ') }}</td>
+                        <td>
+                            {% set eval_data = all_test_evaluations.get(tc['Test Case ID']) %}
+                            {% if eval_data %}
+                                <span class="verdict-{{ eval_data.verdict | lower | replace('(', '') | replace(')', '') | replace(' ', '-') }}">{{ eval_data.verdict }}</span>
+                                {# <small title="Timestamp: {{ eval_data.timestamp }}\nReasoning: {{ eval_data.reasoning }}" style="display:block; font-size:0.8em; color:grey;">{{ eval_data.timestamp[:10] }}</small> #}
+                                <small title="Timestamp: {{ eval_data.timestamp }}\nReasoning: {{ eval_data.reasoning }}" style="cursor: help; color: grey; font-size:0.8em; display:block;">
+                                    on {{ eval_data.timestamp.split('T')[0] }}
+                                </small>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
                         <td>
                             <a href="{{ url_for('web_interface.run_test', test_case_id=tc['Test Case ID']) }}" class="button-link" style="padding: 5px 10px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 4px;">Run Test</a>
                         </td>
