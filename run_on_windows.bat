@@ -5,7 +5,7 @@ REM Configuration
 set PYTHON_CMD=python
 set VENV_DIR=venv
 set REQUIREMENTS_FILE=ai_testing_platform/requirements.txt
-set INSTANCE_DIR=ai_testing_platform/instance
+REM CONFIG_FILE uses forward slashes as it's used by Python later, which is fine.
 set CONFIG_FILE=ai_testing_platform/instance/config.json
 set APP_SCRIPT=ai_testing_platform/run.py
 
@@ -51,14 +51,28 @@ if errorlevel 1 (
 echo Dependencies installed successfully.
 echo.
 
-REM Check/Create Instance Directory
-if not exist %INSTANCE_DIR% (
-    echo Creating instance directory: %INSTANCE_DIR%
-    mkdir %INSTANCE_DIR%
+REM Ensure ai_testing_platform directory exists (it's the main app folder)
+if not exist ai_testing_platform (
+    echo ERROR: The main application directory 'ai_testing_platform' was not found.
+    echo Please ensure you are running this script from the root of the project directory.
+    goto :deactivate_env_and_eof
+)
+
+REM Define and create the instance directory using Windows-style backslashes
+set INSTANCE_DIR_WIN=ai_testing_platform\instance
+
+echo Checking for instance directory: %INSTANCE_DIR_WIN%
+if not exist %INSTANCE_DIR_WIN% (
+    echo Creating instance directory: %INSTANCE_DIR_WIN%
+    mkdir %INSTANCE_DIR_WIN%
     if errorlevel 1 (
-        echo ERROR: Failed to create instance directory.
+        echo ERROR: Failed to create instance directory (%INSTANCE_DIR_WIN%).
+        echo Please check permissions and path.
         goto :deactivate_env_and_eof
     )
+    echo Instance directory created.
+) else (
+    echo Instance directory already exists.
 )
 echo.
 
@@ -94,8 +108,6 @@ if errorlevel 1 (
 
 :deactivate_env_and_eof
 echo Deactivating virtual environment (if active from this script context)...
-REM Deactivation within the same script after 'call' can be tricky.
-REM The user might need to manually close the window or it will close on script end.
 endlocal
 echo.
 echo Script finished.
