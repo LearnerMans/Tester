@@ -5,7 +5,6 @@ REM Configuration
 set PYTHON_CMD=python
 set VENV_DIR=venv
 set REQUIREMENTS_FILE=ai_testing_platform/requirements.txt
-REM CONFIG_FILE uses forward slashes as it's used by Python later, which is fine.
 set CONFIG_FILE=ai_testing_platform/instance/config.json
 set APP_SCRIPT=ai_testing_platform/run.py
 
@@ -51,6 +50,7 @@ if errorlevel 1 (
 echo Dependencies installed successfully.
 echo.
 
+REM --- Refined Instance Directory Creation Logic ---
 REM Ensure ai_testing_platform directory exists (it's the main app folder)
 if not exist ai_testing_platform (
     echo ERROR: The main application directory 'ai_testing_platform' was not found.
@@ -58,25 +58,35 @@ if not exist ai_testing_platform (
     goto :deactivate_env_and_eof
 )
 
-REM Define and create the instance directory using Windows-style backslashes
-set INSTANCE_DIR_WIN=ai_testing_platform\instance
+echo Changing current directory to 'ai_testing_platform' to create instance folder...
+pushd ai_testing_platform
+if errorlevel 1 (
+    echo ERROR: Failed to change directory to 'ai_testing_platform'. This should not happen if the above check passed.
+    goto :deactivate_env_and_eof
+)
 
-echo Checking for instance directory: %INSTANCE_DIR_WIN%
-if not exist %INSTANCE_DIR_WIN% (
-    echo Creating instance directory: %INSTANCE_DIR_WIN%
-    mkdir %INSTANCE_DIR_WIN%
+echo Checking for 'instance' directory (from within 'ai_testing_platform')...
+if not exist instance (
+    echo Creating 'instance' directory...
+    mkdir instance
     if errorlevel 1 (
-        echo ERROR: Failed to create instance directory (%INSTANCE_DIR_WIN%).
-        echo Please check permissions and path.
+        echo ERROR: Failed to create 'instance' directory inside 'ai_testing_platform'.
+        echo Please check permissions.
+        popd
         goto :deactivate_env_and_eof
     )
-    echo Instance directory created.
+    echo 'instance' directory created successfully.
 ) else (
-    echo Instance directory already exists.
+    echo 'instance' directory already exists.
 )
+
+echo Returning to original directory...
+popd
 echo.
+REM --- End of Refined Instance Directory Creation Logic ---
 
 REM Check for config.json
+REM Note: CONFIG_FILE path is relative to original script execution dir (project root).
 echo Checking for configuration file: %CONFIG_FILE%
 if not exist %CONFIG_FILE% (
     echo.

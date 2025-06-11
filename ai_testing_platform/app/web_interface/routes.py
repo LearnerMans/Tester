@@ -41,31 +41,28 @@ def upload_excel():
         except Exception as e:
              return redirect(url_for('web_interface.show_test_cases', error=f"Error saving file: {str(e)}"))
 
-        parsed_result = parse_excel_data(file_path)
+        parsed_response = parse_excel_data(file_path) # Renamed variable
 
-        if isinstance(parsed_result, str) and parsed_result.startswith("Error:"):
-            return redirect(url_for('web_interface.show_test_cases', error=parsed_result))
-        elif isinstance(parsed_result, list):
+        if parsed_response.get("status") == "success":
+            parsed_data_list = parsed_response.get("data", [])
+            if not parsed_data_list: # Handle case where parsing is "success" but data is empty
+                 return redirect(url_for('web_interface.show_test_cases', warning="File parsed successfully, but no test cases found."))
             try:
-                # Clear existing test cases from the table before adding new ones
-                # This is a simple approach. For more complex scenarios, consider
-                # updating existing records or providing user choice.
-                db.session.query(TestCase).delete()
+                db.session.query(TestCase).delete() # Clear existing test cases
 
-                for tc_data in parsed_result:
-                    # Ensure all required fields are present in tc_data
+                for tc_data in parsed_data_list:
+                    # Basic validation, parser should ensure these keys exist for success items
                     if not all(k in tc_data for k in ['Test Case ID', 'Description', 'Expected Outcome']):
-                        # Log this or handle as a partial success/failure
-                        current_app.logger.warning(f"Skipping incomplete test case data: {tc_data}")
+                        current_app.logger.warning(f"Skipping incomplete test case data from parser: {tc_data}")
                         continue
 
                     new_test_case = TestCase(
-                        id=str(tc_data['Test Case ID']), # Ensure ID is string
+                        id=str(tc_data['Test Case ID']),
                         description=tc_data['Description'],
                         expected_outcome=tc_data['Expected Outcome'],
-                        category=tc_data.get('Category'), # Use .get() for optional fields
+                        category=tc_data.get('Category'),
                         priority=tc_data.get('Priority'),
-                        tags=tc_data.get('Tags', []) # Default to empty list if 'Tags' key is missing
+                        tags=tc_data.get('Tags', [])
                     )
                     db.session.add(new_test_case)
 
@@ -73,10 +70,14 @@ def upload_excel():
                 return redirect(url_for('web_interface.show_test_cases', success="File uploaded and test cases saved to database."))
             except Exception as e:
                 db.session.rollback()
-                current_app.logger.error(f"Database error: {str(e)}")
+                current_app.logger.error(f"Database error after parsing: {str(e)}")
                 return redirect(url_for('web_interface.show_test_cases', error=f"Database error: {str(e)}"))
+        elif parsed_response.get("status") == "error":
+            error_message = parsed_response.get("message", "An unspecified error occurred during Excel parsing.")
+            return redirect(url_for('web_interface.show_test_cases', error=error_message))
         else:
-            return redirect(url_for('web_interface.show_test_cases', error="An unexpected error occurred during parsing"))
+            # This case should ideally not be reached if parse_excel_data is consistent
+            return redirect(url_for('web_interface.show_test_cases', error="An unexpected return format from the Excel parser."))
 
     else:
         return redirect(url_for('web_interface.show_test_cases', error="Invalid file type. Please upload .xlsx or .xls files."))

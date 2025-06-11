@@ -15,11 +15,9 @@ def parse_excel_data(file_path):
     try:
         workbook = openpyxl.load_workbook(file_path)
     except FileNotFoundError:
-        # Return a specific error message string that can be passed to the user
-        return "Error: Uploaded file not found by the parser."
+        return {"status": "error", "message": "Error: Uploaded file not found by the parser."}
     except Exception as e:
-        # Return a generic error message for other openpyxl errors
-        return f"Error: Could not open or process the Excel file. Details: {e}"
+        return {"status": "error", "message": f"Error: Could not open or process the Excel file. Details: {e}"}
 
     sheet = workbook.active
     raw_headers = [cell.value for cell in sheet[1]] # Get header row
@@ -48,7 +46,8 @@ def parse_excel_data(file_path):
         except ValueError:
             # A core header is missing
             missing_core_headers_display = [core_expected_headers[lh] for lh in core_expected_headers if lh not in headers]
-            return f"Error: Missing required columns. Ensure {', '.join(f\"'{h}'\" for h in missing_core_headers_display)} columns are present."
+            missing_headers_str = ', '.join([f"'{h}'" for h in missing_core_headers_display])
+            return {"status": "error", "message": f"Error: Missing required columns. Ensure {missing_headers_str} columns are present."}
 
     # Map optional headers
     for h_lower, h_actual_key in optional_expected_headers.items():
@@ -96,7 +95,8 @@ def parse_excel_data(file_path):
 
         parsed_test_cases.append(test_case_data)
 
-    return parsed_test_cases
+    # If everything is successful, wrap the result in a dictionary
+    return {"status": "success", "data": parsed_test_cases}
 
 if __name__ == '__main__':
     # This is a placeholder for creating a dummy Excel file for testing.
