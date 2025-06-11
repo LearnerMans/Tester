@@ -1,12 +1,13 @@
 import os
-from flask import Blueprint, request, redirect, url_for, render_template, current_app, session, flash, abort
+from flask import Blueprint, request, redirect, url_for, render_template, current_app, session, flash, abort, send_file
 from werkzeug.utils import secure_filename
-from datetime import datetime # Added
+from datetime import datetime
 from ..test_case_management.excel_parser import parse_excel_data
-from .. import db # Import db instance from app package
-from ..models.test_case import TestCase # Import TestCase model
-# AIConnector is already imported and ai_connector instance is created
+from .. import db
+from ..models.test_case import TestCase
 from ..conversation_ai_integration.ai_connector import AIConnector
+import openpyxl # Added
+from io import BytesIO # Added
 
 web_interface_blueprint = Blueprint('web_interface', __name__, template_folder='../../templates')
 
@@ -258,6 +259,48 @@ def continue_test(test_case_id, conversation_id):
         return redirect(url_for('web_interface.show_conversation',
                                 test_case_id=test_case_id,
                                 conversation_id=conversation_id))
+
+@web_interface_blueprint.route('/download_excel_template')
+def download_excel_template():
+    wb = openpyxl.Workbook()
+    sheet = wb.active
+    sheet.title = "TestCases"
+
+    headers = ['Test Case ID', 'Description', 'Expected Outcome', 'Category', 'Priority', 'Tags']
+    sheet.append(headers)
+
+    sample_data = [
+        ('TC_001', 'Verify user login with valid credentials.', 'User should be successfully logged in and redirected to the dashboard.', 'Authentication', 'High', 'smoke, login'),
+        ('TC_002', 'Check system response to invalid login attempt.', 'An appropriate error message "Invalid username or password" should be displayed. User should not be logged in.', 'Authentication', 'Medium', 'negative, login, security'),
+        ('TC_003', 'Submit a support ticket.', 'Support ticket should be successfully submitted and a confirmation ID received.', 'Support', 'High', 'core, ticketing'),
+        ('TC_004', 'Verify search functionality with a known keyword.', 'Relevant results matching the keyword should be displayed.', 'Search', 'Medium', ''),
+        ('TC_005', 'Attempt to access a restricted page without authentication.', 'User should be redirected to the login page or shown an access denied message.', 'Security', 'High', 'auth, permissions')
+    ]
+
+    for row_data in sample_data:
+        sheet.append(row_data)
+
+    # Adjust column widths for better readability (optional)
+    for col_idx, header in enumerate(headers, 1):
+        column_letter = openpyxl.utils.get_column_letter(col_idx)
+        if header == 'Description' or header == 'Expected Outcome':
+            sheet.column_dimensions[column_letter].width = 50
+        elif header == 'Test Case ID':
+            sheet.column_dimensions[column_letter].width = 15
+        else:
+            sheet.column_dimensions[column_letter].width = 20
+
+
+    excel_stream = BytesIO()
+    wb.save(excel_stream)
+    excel_stream.seek(0)
+
+    return send_file(
+        excel_stream,
+        as_attachment=True,
+        download_name='test_case_template.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 @web_interface_blueprint.route('/show_evaluation_result/<string:test_case_id>/<string:conversation_id>', methods=['GET'])
 def show_evaluation_result(test_case_id, conversation_id):

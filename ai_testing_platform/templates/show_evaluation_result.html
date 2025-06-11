@@ -1,110 +1,77 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evaluation Result</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
-        .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 800px; margin: auto; }
-        h1, h2, h3 { color: #333; }
-        p { line-height: 1.6; }
-        .test-case-details, .evaluation-outcome, .conversation-display { margin-bottom: 20px; padding: 15px; background-color: #e9ecef; border-radius: 5px; }
-        .evaluation-outcome h3 { margin-top: 0; }
-        .verdict-Pass { color: #155724; background-color: #d4edda; padding: 2px 6px; border-radius: 4px; display: inline-block;}
-        .verdict-Fail { color: #721c24; background-color: #f8d7da; padding: 2px 6px; border-radius: 4px; display: inline-block;}
-        .verdict-Inconclusive { color: #856404; background-color: #fff3cd; padding: 2px 6px; border-radius: 4px; display: inline-block;}
-        .conversation-history { margin-top: 10px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; background-color: #f9f9f9; max-height: 300px; overflow-y: auto;}
-        .message-bubble { padding: 10px; margin-bottom: 10px; border-radius: 8px; line-height: 1.4; max-width: 90%; }
-        .user-message { background-color: #007bff; color: white; margin-left: auto; border-bottom-right-radius: 0; }
-        .assistant-message { background-color: #d1ecf1; color: #0c5460; border-bottom-left-radius: 0; }
-        .message-role { font-weight: bold; margin-bottom: 4px; font-size: 0.9em; }
-        .raw-response-details details { margin-top: 10px; }
-        .raw-response-details summary { cursor: pointer; font-weight: bold; margin-bottom: 5px; }
-        .raw-response-details pre { white-space: pre-wrap; word-wrap: break-word; background-color: #fff; padding: 10px; border-radius: 4px; border: 1px solid #ddd; max-height: 300px; overflow-y: auto; }
-        .navigation-links { margin-top: 30px; display: flex; justify-content: space-between;}
-        .nav-link { display: inline-block; padding: 8px 15px; background-color: #6c757d; color: white; border-radius: 4px; text-decoration: none; }
-        .nav-link:hover { background-color: #5a6268; }
-         /* Flashed messages styling */
-        .flashes { list-style: none; padding: 0; margin-bottom: 15px; }
-        .flashes li { padding: 10px; border-radius: 4px; }
-        .flashes .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .flashes .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .flashes .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Evaluation Result</h1>
+{% extends "base.html" %}
 
-        {# Display Flashed Messages (e.g., from evaluation completion) #}
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <ul class="flashes">
-                {% for category, message in messages %}
-                    <li class="{{ category }}">{{ message }}</li>
-                {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %}
+{% block title %}Evaluation Result: {{ test_case.get('Test Case ID') }} - AI Testing Platform{% endblock %}
 
-        {% if test_case %}
-            <div class="test-case-details">
-                <h2>Test Case Information</h2>
-                <p><strong>Test Case ID:</strong> {{ test_case.get('Test Case ID', 'N/A') }}</p>
-                <p><strong>Description:</strong> {{ test_case.get('Description', 'N/A') }}</p>
-                <p><strong>Expected Outcome:</strong> {{ test_case.get('Expected Outcome', 'N/A') }}</p>
-                <p><strong>Conversation ID:</strong> {{ conversation_id or 'N/A' }}</p>
-            </div>
-        {% else %}
-            <p class="error">Test case details not found.</p>
-        {% endif %}
+{% block content %}
+    <h1>Evaluation Result</h1>
 
-        {% if evaluation_result and evaluation_result.get('status') == 'success' %}
-            <div class="evaluation-outcome">
-                <h2>Evaluation Outcome</h2>
-                <h3>Verdict: <span class="verdict-{{ evaluation_result.get('verdict', 'Inconclusive') | capitalize }}">{{ evaluation_result.get('verdict', 'N/A') }}</span></h3>
+    {# Flashed messages handled by base.html #}
+
+    {% if test_case %}
+        <div class="test-case-details" style="margin-bottom: 1.5rem; padding: 1rem; background-color: #f8f9fa; border: 1px solid var(--border-color); border-radius: 5px;">
+            <h2>Test Case Information</h2>
+            <p><strong>Test Case ID:</strong> {{ test_case.get('Test Case ID', 'N/A') }}</p>
+            <p><strong>Description:</strong> {{ test_case.get('Description', 'N/A') }}</p>
+            <p><strong>Expected Outcome:</strong> <strong style="color: var(--primary-color);">{{ test_case.get('Expected Outcome', 'N/A') }}</strong></p>
+            <p><strong>Conversation ID:</strong> {{ conversation_id or 'N/A' }}</p>
+        </div>
+    {% else %}
+        <div class="alert alert-danger">Test case details not found.</div>
+    {% endif %}
+
+    {% if evaluation_result and evaluation_result.get('status') %}
+        <div class="evaluation-outcome" style="margin-bottom: 1.5rem; padding: 1.5rem; border-radius: 5px;
+            {% if evaluation_result.get('status') == 'success' %}background-color: #e6f7ff; border: 1px solid #b3e0ff;
+            {% elif evaluation_result.get('status') == 'error' %}background-color: var(--fail-color); color: white; border: 1px solid var(--fail-color);
+            {% else %}background-color: #f8f9fa; border: 1px solid var(--border-color);{% endif %}">
+
+            <h2>Evaluation Outcome</h2>
+            {% if evaluation_result.get('status') == 'success' %}
+                {# Use verdict_class filter for dynamic class generation #}
+                {% set verdict_class = evaluation_result.get('verdict', 'inconclusive') | lower | replace(' ', '-') | replace('(', '') | replace(')', '') %}
+                <h3>Verdict: <span class="verdict-{{ verdict_class }}">{{ evaluation_result.get('verdict', 'N/A') }}</span></h3>
                 <p><strong>Reasoning:</strong><br>{{ evaluation_result.get('reasoning', 'N/A') | replace('\n', '<br>') | safe }}</p>
 
-                <div class="raw-response-details">
+                <div class="raw-response-details" style="margin-top: 1rem;">
                     <details>
-                        <summary>View Raw Evaluation LLM Response</summary>
-                        <pre><code>{{ evaluation_result.get('raw_eval_response', 'N/A') }}</code></pre>
+                        <summary style="cursor: pointer; font-weight: bold; color: var(--secondary-color);">View Raw Evaluation LLM Response</summary>
+                        <pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #fff; padding: 10px; border-radius: 4px; border: 1px solid #ddd; max-height: 300px; overflow-y: auto; margin-top: 0.5rem;"><code>{{ evaluation_result.get('raw_eval_response', 'N/A') }}</code></pre>
                     </details>
                 </div>
-            </div>
-        {% elif evaluation_result and evaluation_result.get('status') == 'error' %}
-             <div class="evaluation-outcome error">
-                <h2>Evaluation Failed</h2>
-                <p><strong>Error Message:</strong> {{ evaluation_result.get('message', 'An unknown error occurred during evaluation.') }}</p>
-            </div>
-        {% else %}
-            <div class="evaluation-outcome warning">
-                 <h2>Evaluation Not Available</h2>
-                <p>The evaluation data is not available or an unknown error occurred. Please try running the evaluation again.</p>
-            </div>
-        {% endif %}
-
-        <div class="conversation-display">
-            <h3>Full Conversation History</h3>
-            <div class="conversation-history">
-                {% if conversation_history %}
-                    {% for message in conversation_history %}
-                        <div class="message-bubble {{ 'user-message' if message.role == 'user' else 'assistant-message' }}">
-                            <div class="message-role">{{ message.role | capitalize }}:</div>
-                            <div>{{ message.content | replace('\n', '<br>') | safe }}</div>
-                        </div>
-                    {% endfor %}
-                {% else %}
-                    <p>Conversation history is empty or not available.</p>
-                {% endif %}
-            </div>
+                 <p style="font-size: 0.85em; color: var(--muted-text-color); margin-top: 1rem;">Evaluated using endpoint: {{ evaluation_result.get('api_endpoint_used', 'N/A') }}</p>
+            {% elif evaluation_result.get('status') == 'error' %}
+                <h3 style="color: white;">Evaluation Failed</h3>
+                <p style="color: white;"><strong>Error Message:</strong> {{ evaluation_result.get('message', 'An unknown error occurred during evaluation.') }}</p>
+            {% else %}
+                <h3>Evaluation Status: {{ evaluation_result.get('status') | capitalize }}</h3>
+                <p>The evaluation data is not in the expected format or an unknown error occurred.</p>
+            {% endif %}
         </div>
+    {% else %}
+        <div class="alert alert-warning">Evaluation result not found or is incomplete. Please try running the evaluation again.</div>
+    {% endif %}
 
-        <div class="navigation-links">
-            <a href="{{ url_for('web_interface.show_conversation', test_case_id=test_case.get('Test Case ID'), interaction_id=conversation_id) }}" class="nav-link">Back to Conversation View</a>
-            <a href="{{ url_for('web_interface.show_test_cases') }}" class="nav-link">Evaluate Another Test Case</a>
+    <div class="conversation-display" style="margin-bottom: 1.5rem;">
+        <h3>Full Conversation History (at time of evaluation)</h3>
+        <div class="conversation-history" style="border: 1px solid var(--border-color); padding: 1rem; border-radius: 5px; background-color: #fff; max-height: 300px; overflow-y: auto;">
+            {% if conversation_history %}
+                {% for message in conversation_history %}
+                     <div class="message-bubble {{ 'user-message' if message.role == 'user' else 'assistant-message' }}"
+                         style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; line-height: 1.5; max-width: 85%; clear: both;
+                                {% if message.role == 'user' %}background-color: var(--secondary-color); color: white; margin-left: auto; float: right; border-bottom-right-radius: 0;{% else %}background-color: #e9ecef; color: var(--text-color); float: left; border-bottom-left-radius: 0;{% endif %}">
+                        <div class="message-role" style="font-weight: bold; margin-bottom: 0.25rem; font-size: 0.9em;">{{ message.role | capitalize }}:</div>
+                        <div>{{ message.content | replace('\n', '<br>') | safe }}</div>
+                    </div>
+                {% endfor %}
+                <div style="clear: both;"></div> {# Clear floats after messages #}
+            {% else %}
+                <p class="text-muted">Conversation history is empty or not available.</p>
+            {% endif %}
         </div>
     </div>
-</body>
-</html>
+
+    <div class="navigation-links" style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
+        <a href="{{ url_for('web_interface.show_conversation', test_case_id=test_case.get('Test Case ID'), interaction_id=conversation_id) }}" class="button">Back to Conversation</a>
+        <a href="{{ url_for('web_interface.show_test_cases') }}" class="button">Evaluate Another Test Case</a>
+    </div>
+{% endblock %}

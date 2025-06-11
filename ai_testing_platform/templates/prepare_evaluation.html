@@ -1,73 +1,54 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prepare for Evaluation</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
-        .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 800px; margin: auto; }
-        h1, h2, h3 { color: #333; }
-        p { line-height: 1.6; }
-        .test-case-details, .conversation-summary { margin-bottom: 20px; padding: 15px; background-color: #e9ecef; border-radius: 5px; }
-        .conversation-history { margin-top: 10px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; background-color: #f9f9f9; max-height: 400px; overflow-y: auto;}
-        .message-bubble { padding: 10px; margin-bottom: 10px; border-radius: 8px; line-height: 1.4; max-width: 90%; } /* Increased max-width for this view */
-        .user-message { background-color: #007bff; color: white; margin-left: auto; border-bottom-right-radius: 0; }
-        .assistant-message { background-color: #d1ecf1; color: #0c5460; border-bottom-left-radius: 0; } /* Different color for assistant */
-        .message-role { font-weight: bold; margin-bottom: 4px; font-size: 0.9em; }
-        .placeholder-message { font-style: italic; color: #666; margin-top: 20px; padding:10px; background-color: #fff3cd; border-left: 5px solid #ffeeba;}
-        .navigation-links { margin-top: 30px; display: flex; justify-content: space-between;}
-        .nav-link { display: inline-block; padding: 8px 15px; background-color: #6c757d; color: white; border-radius: 4px; text-decoration: none; }
-        .nav-link:hover { background-color: #5a6268; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Prepare for Evaluation</h1>
+{% extends "base.html" %}
 
-        {% if test_case %}
-            <div class="test-case-details">
-                <h2>Test Case Information</h2>
-                <p><strong>Test Case ID:</strong> {{ test_case.get('Test Case ID', 'N/A') }}</p>
-                <p><strong>Description:</strong> {{ test_case.get('Description', 'N/A') }}</p>
-                <p><strong>Expected Outcome:</strong> {{ test_case.get('Expected Outcome', 'N/A') }}</p>
-            </div>
-        {% else %}
-            <p class="error">Test case details not found.</p>
-        {% endif %}
+{% block title %}Prepare Evaluation: {{ test_case.get('Test Case ID') }} - AI Testing Platform{% endblock %}
 
-        <div class="conversation-summary">
-            <h3>Conversation to Evaluate</h3>
-            <p><strong>Conversation ID:</strong> {{ conversation_id or 'N/A' }}</p>
-            <div class="conversation-history">
-                {% if conversation_history %}
-                    {% for message in conversation_history %}
-                        <div class="message-bubble {{ 'user-message' if message.role == 'user' else 'assistant-message' }}">
-                            <div class="message-role">{{ message.role | capitalize }}:</div>
-                            <div>{{ message.content | replace('\n', '<br>') | safe }}</div>
-                        </div>
-                    {% endfor %}
-                {% else %}
-                    <p>Conversation history is empty.</p>
-                {% endif %}
-            </div>
+{% block content %}
+    <h1>Prepare for Evaluation</h1>
+
+    {% if test_case %}
+        <div class="test-case-details" style="margin-bottom: 1.5rem; padding: 1rem; background-color: #f8f9fa; border: 1px solid var(--border-color); border-radius: 5px;">
+            <h2>Test Case Information</h2>
+            <p><strong>Test Case ID:</strong> {{ test_case.get('Test Case ID', 'N/A') }}</p>
+            <p><strong>Description:</strong> {{ test_case.get('Description', 'N/A') }}</p>
+            <p><strong>Expected Outcome:</strong> <strong style="color: var(--primary-color);">{{ test_case.get('Expected Outcome', 'N/A') }}</strong></p>
         </div>
+    {% else %}
+        <div class="alert alert-danger">Test case details not found.</div>
+    {% endif %}
 
-        <div class="placeholder-message">
-            <p>Review the test case information and conversation history above. Click the button below to submit this data for LLM-based evaluation.</p>
-            <p>The LLM will be asked to provide a 'Pass', 'Fail', or 'Inconclusive' verdict with reasoning.</p>
-        </div>
-
-        <div style="margin-top: 20px; text-align: center;">
-            <form method="POST" action="{{ url_for('web_interface.evaluate_test_interaction', test_case_id=test_case.get('Test Case ID'), conversation_id=conversation_id) }}">
-                <input type="submit" value="Confirm and Start LLM Evaluation" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
-            </form>
-        </div>
-
-        <div class="navigation-links" style="margin-top: 20px;">
-            <a href="{{ url_for('web_interface.show_conversation', test_case_id=test_case.get('Test Case ID'), interaction_id=conversation_id) }}" class="nav-link">Back to Conversation</a>
-            <a href="{{ url_for('web_interface.show_test_cases') }}" class="nav-link">Back to Test Cases List</a>
+    <div class="conversation-summary" style="margin-bottom: 1.5rem; padding: 1rem; background-color: #f8f9fa; border: 1px solid var(--border-color); border-radius: 5px;">
+        <h3>Conversation to Evaluate</h3>
+        <p><strong>Conversation ID:</strong> {{ conversation_id or 'N/A' }}</p>
+        <div class="conversation-history" style="border: 1px solid var(--border-color); padding: 1rem; border-radius: 5px; background-color: #fff; max-height: 400px; overflow-y: auto;">
+            {% if conversation_history %}
+                {% for message in conversation_history %}
+                    <div class="message-bubble {{ 'user-message' if message.role == 'user' else 'assistant-message' }}"
+                         style="padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 8px; line-height: 1.5; max-width: 85%; clear: both;
+                                {% if message.role == 'user' %}background-color: var(--secondary-color); color: white; margin-left: auto; float: right; border-bottom-right-radius: 0;{% else %}background-color: #e9ecef; color: var(--text-color); float: left; border-bottom-left-radius: 0;{% endif %}">
+                        <div class="message-role" style="font-weight: bold; margin-bottom: 0.25rem; font-size: 0.9em;">{{ message.role | capitalize }}:</div>
+                        <div>{{ message.content | replace('\n', '<br>') | safe }}</div>
+                    </div>
+                {% endfor %}
+                <div style="clear: both;"></div> {# Clear floats after messages #}
+            {% else %}
+                <p class="text-muted">Conversation history is empty.</p>
+            {% endif %}
         </div>
     </div>
-</body>
-</html>
+
+    <div class="placeholder-message alert alert-info" style="margin-bottom: 1.5rem;">
+        <p>Review the test case information and conversation history above. Clicking the button below will submit this data for LLM-based evaluation.</p>
+        <p>The LLM will be asked to provide a 'Pass', 'Fail', or 'Inconclusive' verdict with reasoning based on the <strong>Expected Outcome</strong>.</p>
+    </div>
+
+    <div style="margin-top: 1.5rem; text-align: center;" class="form-actions">
+        <form method="POST" action="{{ url_for('web_interface.evaluate_test_interaction', test_case_id=test_case.get('Test Case ID'), conversation_id=conversation_id) }}" style="display: inline;">
+            <input type="submit" value="Confirm and Start LLM Evaluation" class="button-primary" style="font-size: 1.1rem; padding: 12px 25px;">
+        </form>
+    </div>
+
+    <div class="navigation-links" style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
+        <a href="{{ url_for('web_interface.show_conversation', test_case_id=test_case.get('Test Case ID'), interaction_id=conversation_id) }}" class="button">Back to Conversation</a>
+        <a href="{{ url_for('web_interface.show_test_cases') }}" class="button">Back to Test Cases List</a>
+    </div>
+{% endblock %}
