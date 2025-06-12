@@ -27,7 +27,7 @@
             <small class="text-muted">Leave blank to use the default OpenAI API URL.</small>
         </div>
 
-        <div style="margin-bottom: 1.5rem;">
+        <div style="margin-bottom: 1rem;">
             <label for="openai_api_key">OpenAI API Key:</label>
             <input type="password" id="openai_api_key" name="openai_api_key">
             {% if openai_api_key_is_present %}
@@ -36,12 +36,18 @@
                 <small class="text-muted">Enter your OpenAI API key. Required if OpenAI is the selected provider.</small>
             {% endif %}
         </div>
+        <div style="margin-bottom: 1.5rem;">
+            <label for="openai_model_name">OpenAI Model Name:</label>
+            <input type="text" name="openai_model_name" id="openai_model_name" placeholder="e.g., gpt-4o, gpt-3.5-turbo" value="{{ current_openai_model_name | default('gpt-4o') }}">
+            <small class="text-muted">Specify the OpenAI model to use (e.g., gpt-4o, gpt-3.5-turbo).</small>
+        </div>
+
 
         <hr style="margin: 1.5rem 0;">
 
         {# Google Gemini Configuration #}
         <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">Google Gemini Configuration</h2>
-        <div style="margin-bottom: 1.5rem;">
+        <div style="margin-bottom: 1rem;">
             <label for="gemini_api_key">Google Gemini API Key:</label>
             <input type="password" id="gemini_api_key" name="gemini_api_key">
             {% if gemini_api_key_is_present %}
@@ -49,6 +55,11 @@
             {% else %}
                 <small class="text-muted">Enter your Google Gemini API key. Required if Google Gemini is the selected provider.</small>
             {% endif %}
+        </div>
+        <div style="margin-bottom: 1.5rem;">
+            <label for="gemini_model_name">Google Gemini Model Name:</label>
+            <input type="text" name="gemini_model_name" id="gemini_model_name" placeholder="e.g., gemini-pro, gemini-1.0-pro" value="{{ current_gemini_model_name | default('gemini-pro') }}">
+            <small class="text-muted">Specify the Gemini model to use (e.g., gemini-pro, gemini-1.5-pro-latest).</small>
         </div>
 
         <div style="margin-top: 2rem;">
@@ -62,12 +73,18 @@
         <p class="alert alert-{{ 'success' if 'successful' in current_status.lower() or 'saved' in current_status.lower() else 'danger' if 'failed' in current_status.lower() else 'info' }}">
             {{ current_status }}
         </p>
-        <p><strong>Selected Provider:</strong> {{ current_llm_provider | capitalize }}</p>
+        <p><strong>Selected Provider:</strong> {{ current_llm_provider | replace('_', ' ') | capitalize }}</p>
         {% if current_openai_api_endpoint %}
             <p><strong>Stored OpenAI Endpoint:</strong> {{ current_openai_api_endpoint }}</p>
         {% endif %}
         <p><strong>OpenAI Key Present:</strong> {{ 'Yes' if openai_api_key_is_present else 'No' }}</p>
+        {% if current_openai_model_name %}
+            <p><strong>Configured OpenAI Model:</strong> {{ current_openai_model_name }}</p>
+        {% endif %}
         <p><strong>Gemini Key Present:</strong> {{ 'Yes' if gemini_api_key_is_present else 'No' }}</p>
+        {% if current_gemini_model_name %}
+            <p><strong>Configured Gemini Model:</strong> {{ current_gemini_model_name }}</p>
+        {% endif %}
     </div>
     {% endif %}
 

@@ -143,22 +143,24 @@ ai_connector = AIConnector()
 @web_interface_blueprint.route('/configure_ai', methods=['GET', 'POST'])
 def configure_ai():
     if request.method == 'POST':
+    if request.method == 'POST':
         llm_provider = request.form.get('llm_provider', 'openai').strip()
         openai_api_key_from_form = request.form.get('openai_api_key', '').strip()
         openai_api_endpoint = request.form.get('openai_api_endpoint', '').strip()
         gemini_api_key_from_form = request.form.get('gemini_api_key', '').strip()
+        openai_model_name_from_form = request.form.get('openai_model_name', 'gpt-4o').strip()
+        gemini_model_name_from_form = request.form.get('gemini_model_name', 'gemini-pro').strip()
 
-        # Load existing config to preserve keys not submitted if they are empty in the form
-        # (e.g., if user only wants to update OpenAI key, Gemini key should persist)
         current_config = ai_connector.load_config()
 
-        # Update keys only if new values are provided in the form, otherwise keep existing
-        # This is important for password fields where users might leave them blank if not changing.
         final_openai_api_key = openai_api_key_from_form if openai_api_key_from_form else current_config.get('openai_api_key', '')
         final_gemini_api_key = gemini_api_key_from_form if gemini_api_key_from_form else current_config.get('gemini_api_key', '')
 
-        # Check connection can be provider specific if we want more robust validation here.
-        # For now, we're just saving the config. A basic check for the active provider's key:
+        # Ensure model names are not empty, use defaults from load_config if form submits empty
+        final_openai_model_name = openai_model_name_from_form if openai_model_name_from_form else current_config.get('openai_model_name', 'gpt-4o')
+        final_gemini_model_name = gemini_model_name_from_form if gemini_model_name_from_form else current_config.get('gemini_model_name', 'gemini-pro')
+
+
         validation_ok = True
         if llm_provider == 'openai' and not final_openai_api_key:
             flash("OpenAI API Key is required when OpenAI is the selected provider.", "error")
@@ -169,10 +171,12 @@ def configure_ai():
 
         if validation_ok:
             save_success = ai_connector.save_config(
-                llm_provider,
-                final_openai_api_key,
-                openai_api_endpoint, # Endpoint is not provider-specific in form, saved as is
-                final_gemini_api_key
+                llm_provider=llm_provider,
+                openai_api_key=final_openai_api_key,
+                openai_api_endpoint=openai_api_endpoint,
+                gemini_api_key=final_gemini_api_key,
+                openai_model_name=final_openai_model_name,
+                gemini_model_name=final_gemini_model_name
             )
             if save_success:
                 flash("Configuration saved successfully.", "success")
@@ -188,11 +192,12 @@ def configure_ai():
     # GET request
     config = ai_connector.load_config()
     current_llm_provider = config.get('llm_provider', 'openai')
-    current_openai_api_key = config.get('openai_api_key', '') # Actual key not passed to template
+    current_openai_api_key = config.get('openai_api_key', '')
     current_openai_api_endpoint = config.get('openai_api_endpoint', '')
-    current_gemini_api_key = config.get('gemini_api_key', '') # Actual key not passed to template
+    current_gemini_api_key = config.get('gemini_api_key', '')
+    current_openai_model_name = config.get('openai_model_name', 'gpt-4o')
+    current_gemini_model_name = config.get('gemini_model_name', 'gemini-pro')
 
-    # For security, only pass booleans indicating if keys are present
     openai_api_key_is_present = True if current_openai_api_key else False
     gemini_api_key_is_present = True if current_gemini_api_key else False
 
@@ -203,6 +208,8 @@ def configure_ai():
                            current_openai_api_endpoint=current_openai_api_endpoint,
                            openai_api_key_is_present=openai_api_key_is_present,
                            gemini_api_key_is_present=gemini_api_key_is_present,
+                           current_openai_model_name=current_openai_model_name,
+                           current_gemini_model_name=current_gemini_model_name,
                            current_status=current_status_from_session
                            )
 
