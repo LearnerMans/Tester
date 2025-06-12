@@ -38,7 +38,7 @@
                         <pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #fff; padding: 10px; border-radius: 4px; border: 1px solid #ddd; max-height: 300px; overflow-y: auto; margin-top: 0.5rem;"><code>{{ evaluation_result.get('raw_eval_response', 'N/A') }}</code></pre>
                     </details>
                 </div>
-                 <p style="font-size: 0.85em; color: var(--muted-text-color); margin-top: 1rem;">Evaluated using endpoint: {{ evaluation_result.get('api_endpoint_used', 'N/A') }}</p>
+                 <p style="font-size: 0.85em; color: var(--muted-text-color); margin-top: 1rem;">Evaluation performed using: {{ evaluation_result.get('api_endpoint_used', 'N/A') }}</p>
             {% elif evaluation_result.get('status') == 'error' %}
                 <h3 style="color: white;">Evaluation Failed</h3>
                 <p style="color: white;"><strong>Error Message:</strong> {{ evaluation_result.get('message', 'An unknown error occurred during evaluation.') }}</p>

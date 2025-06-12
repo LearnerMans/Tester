@@ -143,47 +143,67 @@ ai_connector = AIConnector()
 @web_interface_blueprint.route('/configure_ai', methods=['GET', 'POST'])
 def configure_ai():
     if request.method == 'POST':
-        api_endpoint = request.form.get('api_endpoint', '').strip()
-        # Important: For API keys, always retrieve them fresh from the form on POST.
-        # Do not rely on a previously loaded key from config if the user intends to update it.
-        api_key = request.form.get('api_key', '').strip()
+        llm_provider = request.form.get('llm_provider', 'openai').strip()
+        openai_api_key_from_form = request.form.get('openai_api_key', '').strip()
+        openai_api_endpoint = request.form.get('openai_api_endpoint', '').strip()
+        gemini_api_key_from_form = request.form.get('gemini_api_key', '').strip()
 
-        # Validate the input from the form
-        is_valid_input = ai_connector.check_connection(api_endpoint, api_key)
+        # Load existing config to preserve keys not submitted if they are empty in the form
+        # (e.g., if user only wants to update OpenAI key, Gemini key should persist)
+        current_config = ai_connector.load_config()
 
-        if is_valid_input:
-            # If input is valid, attempt to save it
-            save_success = ai_connector.save_config(api_endpoint, api_key)
+        # Update keys only if new values are provided in the form, otherwise keep existing
+        # This is important for password fields where users might leave them blank if not changing.
+        final_openai_api_key = openai_api_key_from_form if openai_api_key_from_form else current_config.get('openai_api_key', '')
+        final_gemini_api_key = gemini_api_key_from_form if gemini_api_key_from_form else current_config.get('gemini_api_key', '')
+
+        # Check connection can be provider specific if we want more robust validation here.
+        # For now, we're just saving the config. A basic check for the active provider's key:
+        validation_ok = True
+        if llm_provider == 'openai' and not final_openai_api_key:
+            flash("OpenAI API Key is required when OpenAI is the selected provider.", "error")
+            validation_ok = False
+        elif llm_provider == 'google_gemini' and not final_gemini_api_key:
+            flash("Google Gemini API Key is required when Google Gemini is the selected provider.", "error")
+            validation_ok = False
+
+        if validation_ok:
+            save_success = ai_connector.save_config(
+                llm_provider,
+                final_openai_api_key,
+                openai_api_endpoint, # Endpoint is not provider-specific in form, saved as is
+                final_gemini_api_key
+            )
             if save_success:
                 flash("Configuration saved successfully.", "success")
-                # Optionally, store a general success status in session if needed for other parts of app
                 session['ai_config_status'] = "Configuration saved."
             else:
                 flash("Error saving configuration to file.", "error")
                 session['ai_config_status'] = "Error saving configuration."
         else:
-            # Input itself was invalid (e.g., missing endpoint or key)
-            flash("Validation failed. API Endpoint and API Key are required.", "error")
-            session['ai_config_status'] = "Validation failed. Missing credentials."
+             session['ai_config_status'] = "Validation failed. Missing required API key for selected provider."
 
         return redirect(url_for('web_interface.configure_ai'))
 
     # GET request
-    # Load current config to display in the form
     config = ai_connector.load_config()
-    current_endpoint = config.get('api_endpoint', '')
-    # For security, we don't pass the actual API key to the template for display in a password field.
-    # We can indicate if a key is already stored.
-    api_key_is_present = True if config.get('api_key') else False
+    current_llm_provider = config.get('llm_provider', 'openai')
+    current_openai_api_key = config.get('openai_api_key', '') # Actual key not passed to template
+    current_openai_api_endpoint = config.get('openai_api_endpoint', '')
+    current_gemini_api_key = config.get('gemini_api_key', '') # Actual key not passed to template
 
-    # Get status from session (e.g., result of last POST)
-    # This can be augmented or replaced by more specific feedback if needed.
-    current_status_from_session = session.pop('ai_config_status', None) # Pop to show only once per action
+    # For security, only pass booleans indicating if keys are present
+    openai_api_key_is_present = True if current_openai_api_key else False
+    gemini_api_key_is_present = True if current_gemini_api_key else False
+
+    current_status_from_session = session.pop('ai_config_status', None)
 
     return render_template('configure_ai.html',
-                           current_endpoint=current_endpoint,
-                           api_key_is_present=api_key_is_present,
-                           current_status=current_status_from_session # Display flashed/session status
+                           current_llm_provider=current_llm_provider,
+                           current_openai_api_endpoint=current_openai_api_endpoint,
+                           openai_api_key_is_present=openai_api_key_is_present,
+                           gemini_api_key_is_present=gemini_api_key_is_present,
+                           current_status=current_status_from_session
                            )
 
 @web_interface_blueprint.route('/run_test/<string:test_case_id>', methods=['GET'])
@@ -394,14 +414,22 @@ def show_conversation(test_case_id, interaction_id):
     # Flashed messages will be available directly in the template via get_flashed_messages()
     # No need to explicitly pass them here if using the standard flash pattern.
 
+    config = ai_connector.load_config() # Load current AI config
+    provider_name = config.get('llm_provider', 'N/A').replace('_', ' ').title()
+    model_info = ""
+    if config.get('llm_provider') == 'google_gemini':
+        model_info = "(Model: gemini-pro)" # Assuming gemini-pro is used
+    elif config.get('llm_provider') == 'openai':
+        model_info = "(Model: gpt-3.5-turbo default)" # Default model for chat
+
+    configured_provider_info = f"{provider_name} {model_info}"
+
+
     return render_template('run_test_result.html',
                            test_case=test_case.to_dict(),
                            conversation_history=conversation_history,
-                           current_conversation_id=interaction_id, # or session.get('current_conversation_id')
-                           # raw_response_initial can be cleared or managed if needed
-                           # For FR-012, focusing on history and follow-up form.
-                           # The 'response' object from the initial call is not directly passed anymore.
-                           # Flashed messages will handle latest AI response/error.
+                           current_conversation_id=interaction_id,
+                           configured_provider_info=configured_provider_info
                            )
 
 @web_interface_blueprint.route('/prepare_evaluation/<string:test_case_id>/<string:conversation_id>', methods=['GET'])

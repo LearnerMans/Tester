@@ -1,71 +1,126 @@
 import logging
 import os
 import json
-import openai # Added
-from openai import OpenAI # Added
+import openai
+from openai import OpenAI
+import google.generativeai as genai # Added
+import uuid # Added
 
 # Configure a simple logger for this module
 logger = logging.getLogger(__name__)
-# BasicConfig should ideally be called once, perhaps in app/__init__.py or run.py if more modules use logging.
-# For simplicity in this module, we'll leave it, but be mindful of multiple calls in larger apps.
-if not logger.hasHandlers(): # Avoid adding multiple handlers if this module is reloaded
+if not logger.hasHandlers():
     logging.basicConfig(level=logging.INFO)
 
-# Define the path to the instance folder and the config file within it.
-# This assumes run.py is in 'ai_testing_platform/', so 'instance/' is at the same level.
 INSTANCE_FOLDER_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'instance')
 CONFIG_FILE_PATH = os.path.join(INSTANCE_FOLDER_PATH, 'config.json')
 
 
 class AIConnector:
     """
-    Handles the connection and communication with the target conversational AI product,
-    including loading and saving configuration.
+    Handles the connection and communication with various conversational AI providers,
+    including loading and saving configuration, and managing provider-specific clients.
     """
 
     def __init__(self):
-        # Ensure instance directory exists when an AIConnector is initialized
         os.makedirs(INSTANCE_FOLDER_PATH, exist_ok=True)
+        self.config = self.load_config() # Load config on init
+        self.provider = self.config.get('llm_provider', 'openai') # Default to openai
+
+        self.openai_client = None
+        self.gemini_model = None # For Gemini, this will be the GenerativeModel instance
+
+        logger.info(f"AIConnector initialized with provider: {self.provider}")
+
+        if self.provider == 'openai':
+            openai_api_key = self.config.get('openai_api_key')
+            openai_base_url = self.config.get('openai_api_endpoint') # Custom base URL
+            if openai_api_key:
+                try:
+                    self.openai_client = OpenAI(
+                        api_key=openai_api_key,
+                        base_url=openai_base_url if openai_base_url else None # Pass None if empty to use default
+                    )
+                    logger.info("OpenAI client configured.")
+                except Exception as e:
+                    logger.error(f"Error initializing OpenAI client: {e}")
+            else:
+                logger.warning("OpenAI API key not found in config. OpenAI client not configured.")
+
+        elif self.provider == 'google_gemini':
+            gemini_api_key = self.config.get('gemini_api_key')
+            if gemini_api_key:
+                try:
+                    genai.configure(api_key=gemini_api_key)
+                    # Model selection can be made configurable later if needed
+                    self.gemini_model = genai.GenerativeModel('gemini-pro')
+                    logger.info("Google Gemini client configured with model gemini-pro.")
+                except Exception as e:
+                    logger.error(f"Error configuring Google Gemini client: {e}")
+                    self.gemini_model = None # Ensure it's None on error
+            else:
+                logger.warning("Google Gemini API key not found in config. Gemini client not configured.")
+        else:
+            logger.warning(f"Unsupported LLM provider selected: {self.provider}")
 
     def load_config(self) -> dict:
         """
-        Loads AI configuration (API endpoint and key) from a JSON file in the instance folder.
+        Loads AI configuration from a JSON file in the instance folder.
+        Includes LLM provider, OpenAI keys/endpoint, and Gemini keys.
 
         Returns:
-            dict: Loaded configuration, e.g., {'api_endpoint': '...', 'api_key': '...'}.
-                  Returns a default dict with empty strings if the file doesn't exist or is invalid.
+            dict: Loaded configuration. Defaults are provided for missing keys.
         """
+        default_config = {
+            'llm_provider': 'openai',
+            'openai_api_key': '',
+            'openai_api_endpoint': '', # For OpenAI custom base URL or other non-OpenAI models
+            'gemini_api_key': ''
+        }
         try:
             if os.path.exists(CONFIG_FILE_PATH):
                 with open(CONFIG_FILE_PATH, 'r') as f:
                     config = json.load(f)
-                    # Ensure essential keys are present, defaulting if not
-                    config.setdefault('api_endpoint', '')
-                    config.setdefault('api_key', '')
-                    return config
+                    # Ensure all expected keys are present, merging with defaults
+                    # This preserves existing keys while adding new ones if they are missing.
+                    final_config = default_config.copy()
+                    final_config.update(config) # Overwrite defaults with loaded values
+
+                    # Specific handling for renamed keys for backward compatibility
+                    if 'api_key' in config and 'openai_api_key' not in config:
+                        final_config['openai_api_key'] = config['api_key']
+                    if 'api_endpoint' in config and 'openai_api_endpoint' not in config:
+                        final_config['openai_api_endpoint'] = config['api_endpoint']
+
+                    return final_config
             else:
-                logger.info(f"Config file not found at {CONFIG_FILE_PATH}. Returning default empty config.")
-                return {'api_endpoint': '', 'api_key': ''}
+                logger.info(f"Config file not found at {CONFIG_FILE_PATH}. Returning default config.")
+                return default_config
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error loading or parsing config file {CONFIG_FILE_PATH}: {e}")
-            return {'api_endpoint': '', 'api_key': ''} # Return default on error
+            return default_config # Return default on error
 
-    def save_config(self, api_endpoint: str, api_key: str) -> bool:
+    def save_config(self, llm_provider: str, openai_api_key: str, openai_api_endpoint: str, gemini_api_key: str) -> bool:
         """
-        Saves AI configuration (API endpoint and key) to a JSON file in the instance folder.
+        Saves AI configuration to a JSON file in the instance folder.
 
         Args:
-            api_endpoint (str): The API endpoint URL.
-            api_key (str): The API key.
+            llm_provider (str): The selected LLM provider ('openai' or 'google_gemini').
+            openai_api_key (str): The API key for OpenAI.
+            openai_api_endpoint (str): The custom base URL for OpenAI or endpoint for other models.
+            gemini_api_key (str): The API key for Google Gemini.
 
         Returns:
             bool: True if saving was successful, False otherwise.
         """
         config_data = {
-            'api_endpoint': api_endpoint,
-            'api_key': api_key  # Storing API key directly; consider encryption for production
+            'llm_provider': llm_provider,
+            'openai_api_key': openai_api_key,
+            'openai_api_endpoint': openai_api_endpoint,
+            'gemini_api_key': gemini_api_key
         }
         try:
+            # Ensure instance directory exists (should be by __init__, but good to double check)
+            os.makedirs(INSTANCE_FOLDER_PATH, exist_ok=True)
             with open(CONFIG_FILE_PATH, 'w') as f:
                 json.dump(config_data, f, indent=4)
             logger.info(f"Configuration saved successfully to {CONFIG_FILE_PATH}")
@@ -121,62 +176,124 @@ class AIConnector:
         Returns:
             dict: A dictionary containing the status of the operation and AI's response.
         """
-        config = self.load_config()
-        api_key = config.get('api_key')
-        configured_base_url = config.get('api_endpoint')
-
-        if not api_key:
-            logger.warning("OpenAI API key not configured. Cannot send messages.")
-            return {"status": "error", "message": "OpenAI API key not configured. Please configure API key first."}
-
         if not messages:
             logger.warning("No messages provided to send_messages_to_llm.")
             return {"status": "error", "message": "No messages provided."}
 
-        try:
+        if self.provider == 'openai':
+            if not self.openai_client:
+                logger.error("OpenAI client not configured (API key missing or invalid in __init__).")
+                return {"status": "error", "message": "OpenAI client not configured. Please check API key and configuration."}
+
             logger.info(f"Sending {len(messages)} messages to OpenAI model gpt-3.5-turbo.")
-            # Log the last message content for context, or a summary
             if messages:
                  logger.info(f"Last message role: {messages[-1].get('role')}, content snippet: '{str(messages[-1].get('content'))[:100]}...'")
 
-            if configured_base_url:
-                logger.info(f"Using custom base URL: {configured_base_url}")
-                client = OpenAI(api_key=api_key, base_url=configured_base_url)
-            else:
-                client = OpenAI(api_key=api_key)
+            try:
+                completion = self.openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=messages
+                )
+                llm_response_content = completion.choices[0].message.content
+                interaction_id = completion.id
+                logger.info(f"OpenAI response received. Interaction ID: {interaction_id}")
+                return {
+                    "status": "success",
+                    "message_from_ai": llm_response_content,
+                    "interaction_id": interaction_id,
+                    "raw_response": completion.model_dump_json(indent=2),
+                    "api_endpoint_used": str(self.openai_client.base_url)
+                }
+            except openai.APIConnectionError as e:
+                logger.error(f"OpenAI API Connection Error: {e}")
+                return {"status": "error", "message": f"OpenAI API Connection Error: {str(e)}"}
+            except openai.RateLimitError as e:
+                logger.error(f"OpenAI API Rate Limit Error: {e}")
+                return {"status": "error", "message": f"OpenAI API Rate Limit Error: {str(e)}"}
+            except openai.APIStatusError as e:
+                logger.error(f"OpenAI API Status Error: {e.status_code} - {e.response}")
+                return {"status": "error", "message": f"OpenAI API Status Error: {e.status_code} - {str(e.response)}"}
+            except Exception as e:
+                logger.error(f"An unexpected error occurred with OpenAI: {e}")
+                return {"status": "error", "message": f"An unexpected error occurred with OpenAI: {str(e)}"}
 
-            completion = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages # Pass the whole conversation history
-            )
+        elif self.provider == 'google_gemini':
+            if not self.gemini_model:
+                logger.error("Google Gemini client not configured (API key missing or configuration error in __init__).")
+                return {"status": "error", "message": "Google Gemini client not configured. Please check API key and configuration."}
 
-            llm_response_content = completion.choices[0].message.content
-            # The 'id' of the completion can serve as a general interaction ID,
-            # but a true 'conversation_id' might need to be managed externally if not part of the completion object for multi-turn.
-            # For now, using completion.id is fine for identifying this specific exchange.
-            interaction_id = completion.id
+            gemini_history = []
+            last_user_message_content = ""
 
-            logger.info(f"OpenAI response received. Interaction ID: {interaction_id}")
+            if messages:
+                processed_messages = []
+                # Gemini prefers strict user/model alternation. Consolidate consecutive messages.
+                for msg in messages:
+                    role = 'model' if msg['role'] == 'assistant' else msg['role']
+                    if role not in ['user', 'model']: # Skip system or other roles for now
+                        continue
+                    if processed_messages and processed_messages[-1]['role'] == role:
+                        processed_messages[-1]['parts'][0]['text'] += "\n" + msg['content'] # Append content
+                    else:
+                        processed_messages.append({'role': role, 'parts': [{'text': msg['content']}]})
 
-            return {
-                "status": "success",
-                "message_from_ai": llm_response_content,
-                "interaction_id": interaction_id, # Renamed from conversation_id for clarity this is for one exchange
-                "raw_response": completion.model_dump_json(indent=2),
-                "api_endpoint_used": str(client.base_url) # Ensure it's a string
-            }
-        except openai.APIConnectionError as e:
-            logger.error(f"OpenAI API Connection Error: {e}")
-            return {"status": "error", "message": f"OpenAI API Connection Error: {str(e)}"}
-        except openai.RateLimitError as e:
-            logger.error(f"OpenAI API Rate Limit Error: {e}")
-            return {"status": "error", "message": f"OpenAI API Rate Limit Error: {str(e)}"}
-        except openai.APIStatusError as e:
-            logger.error(f"OpenAI API Status Error: {e.status_code} - {e.response}")
-            return {"status": "error", "message": f"OpenAI API Status Error: {e.status_code} - {str(e.response)}"}
-        except Exception as e:
-            logger.error(f"An unexpected error occurred with OpenAI: {e}")
-            return {"status": "error", "message": f"An unexpected error occurred with OpenAI: {str(e)}"}
+                # Separate last user message from history for send_message method
+                if processed_messages and processed_messages[-1]['role'] == 'user':
+                    last_user_message_content = processed_messages[-1]['parts'][0]['text']
+                    gemini_history = processed_messages[:-1]
+                elif processed_messages: # Last message is 'model', just pass all as history and send empty user message (or specific prompt)
+                     gemini_history = processed_messages
+                     # This scenario might need a specific "continue" prompt for Gemini if last was model.
+                     # For now, if last is model, we'll send a generic "continue" or expect user to provide next input.
+                     # Let's assume for now that the very last message in `messages` list is always the one to send.
+                     # The problem description implies `messages` is the full history *including* the latest user message.
+                     return {"status": "error", "message": "Last message to send to Gemini must be from a user role for this flow."}
+
+
+            if not last_user_message_content: # This implies `messages` was empty or ended with assistant.
+                 return {"status": "error", "message": "No user message found as the last message to send to Gemini."}
+
+            logger.info(f"Sending message to Google Gemini ({self.gemini_model.model_name}). History length: {len(gemini_history)}.")
+            logger.info(f"Last user message content snippet: '{last_user_message_content[:100]}...'")
+
+            try:
+                chat = self.gemini_model.start_chat(history=gemini_history)
+                gemini_response = chat.send_message(last_user_message_content)
+
+                message_content = ""
+                if gemini_response.parts:
+                    message_content = ''.join(part.text for part in gemini_response.parts if hasattr(part, 'text'))
+                elif hasattr(gemini_response, 'text'):
+                    message_content = gemini_response.text
+
+                if not message_content and gemini_response.candidates and hasattr(gemini_response.candidates[0], 'finish_reason') and str(gemini_response.candidates[0].finish_reason) != "STOP":
+                    # Check for safety reasons if content is empty
+                    reason_str = str(gemini_response.candidates[0].finish_reason)
+                    # Safety ratings can be checked here: gemini_response.candidates[0].safety_ratings
+                    categories_blocked = [rating.category for rating in gemini_response.candidates[0].safety_ratings if str(rating.probability) not in ["NEGLIGIBLE", "LOW"]]
+                    if categories_blocked:
+                         message_content = f"Response blocked due to safety reasons: {reason_str} (Categories: {', '.join(map(str,categories_blocked))}). Content may be incomplete or unavailable."
+                    else:
+                         message_content = f"Response stopped due to: {reason_str}. Content may be incomplete or unavailable."
+
+
+                interaction_id = "gemini_interaction_" + str(uuid.uuid4())
+                api_info = f"Google Gemini ({self.gemini_model.model_name})"
+
+                return {
+                    "status": "success",
+                    "message_from_ai": message_content,
+                    "interaction_id": interaction_id,
+                    "raw_response": str(gemini_response),
+                    "api_endpoint_used": api_info
+                }
+            except Exception as e:
+                logger.error(f"Google Gemini API Error: {e}")
+                return {"status": "error", "message": f"Google Gemini API Error: {str(e)}"}
+
+        else:
+            logger.error(f"Unsupported LLM provider: {self.provider}")
+            return {"status": "error", "message": f"Unsupported LLM provider: {self.provider}"}
 
 
 if __name__ == '__main__':
@@ -270,58 +387,78 @@ if __name__ == '__main__':
         )
 
         messages_for_eval_llm = [{"role": "user", "content": evaluation_prompt_content}]
+        llm_raw_response_content = ""
+        api_info_for_eval = ""
 
-        try:
-            logger.info(f"Sending conversation for evaluation with prompt: {evaluation_prompt_content[:200]}...") # Log snippet
+        logger.info(f"Sending conversation for evaluation using provider: {self.provider}. Prompt snippet: {evaluation_prompt_content[:200]}...")
 
-            if configured_base_url:
-                client = OpenAI(api_key=api_key, base_url=configured_base_url)
-            else:
-                client = OpenAI(api_key=api_key)
+        if self.provider == 'openai':
+            if not self.openai_client:
+                return {"status": "error", "message": "OpenAI client not configured for evaluation."}
+            try:
+                completion = self.openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=messages_for_eval_llm,
+                    temperature=0.2
+                )
+                llm_raw_response_content = completion.choices[0].message.content
+                api_info_for_eval = str(self.openai_client.base_url)
+            except openai.APIConnectionError as e: return {"status": "error", "message": f"OpenAI API Connection Error during evaluation: {str(e)}"}
+            except openai.RateLimitError as e: return {"status": "error", "message": f"OpenAI API Rate Limit Error during evaluation: {str(e)}"}
+            except openai.APIStatusError as e: return {"status": "error", "message": f"OpenAI API Status Error during evaluation: {e.status_code} - {str(e.response)}"}
+            except Exception as e: return {"status": "error", "message": f"An unexpected error with OpenAI during evaluation: {str(e)}"}
 
-            completion = client.chat.completions.create(
-                model="gpt-3.5-turbo", # Or a more capable model if needed for better evaluation
-                messages=messages_for_eval_llm,
-                temperature=0.2 # Lower temperature for more deterministic evaluation
-            )
+        elif self.provider == 'google_gemini':
+            if not self.gemini_model:
+                return {"status": "error", "message": "Google Gemini client not configured for evaluation."}
+            try:
+                # For evaluation, Gemini's chat history isn't strictly needed if the prompt is self-contained.
+                # We send the single detailed prompt as the first user message.
+                gemini_response = self.gemini_model.generate_content(evaluation_prompt_content) # Simpler API for single-turn
 
-            llm_raw_response_content = completion.choices[0].message.content
-            logger.info(f"Raw evaluation response from LLM: {llm_raw_response_content}")
+                if gemini_response.parts:
+                    llm_raw_response_content = ''.join(part.text for part in gemini_response.parts if hasattr(part, 'text'))
+                elif hasattr(gemini_response, 'text'):
+                     llm_raw_response_content = gemini_response.text
 
-            # Parse the LLM's response string
-            extracted_verdict = "Inconclusive (Parsing Failed)"
-            extracted_reasoning = "Could not parse verdict and reasoning from LLM response."
+                if not llm_raw_response_content and gemini_response.candidates and hasattr(gemini_response.candidates[0], 'finish_reason') and str(gemini_response.candidates[0].finish_reason) != "STOP":
+                    reason_str = str(gemini_response.candidates[0].finish_reason)
+                    categories_blocked = [rating.category for rating in gemini_response.candidates[0].safety_ratings if str(rating.probability) not in ["NEGLIGIBLE", "LOW"]]
+                    if categories_blocked:
+                        llm_raw_response_content = f"Response blocked due to safety reasons: {reason_str} (Categories: {', '.join(map(str,categories_blocked))}). Content may be incomplete or unavailable."
+                    else:
+                        llm_raw_response_content = f"Response stopped due to: {reason_str}. Content may be incomplete or unavailable."
 
-            verdict_found = False
-            reasoning_found = False
+                api_info_for_eval = f"Google Gemini ({self.gemini_model.model_name})"
+            except Exception as e:
+                return {"status": "error", "message": f"Google Gemini API Error during evaluation: {str(e)}"}
 
-            lines = llm_raw_response_content.strip().split('\n')
-            for line in lines:
-                if line.lower().startswith("verdict:"):
-                    extracted_verdict = line.split(":", 1)[1].strip()
-                    verdict_found = True
-                elif line.lower().startswith("reasoning:"):
-                    extracted_reasoning = line.split(":", 1)[1].strip()
-                    reasoning_found = True
+        else:
+            return {"status": "error", "message": f"Unsupported LLM provider for evaluation: {self.provider}"}
 
-            if not verdict_found and not reasoning_found and llm_raw_response_content:
-                # If keywords aren't found but there's content, use the whole content as reasoning.
-                # This can happen if the LLM doesn't follow formatting instructions perfectly.
-                extracted_reasoning = f"LLM did not follow formatting. Raw response: {llm_raw_response_content}"
+        logger.info(f"Raw evaluation response from LLM ({self.provider}): {llm_raw_response_content}")
+        # Parse the LLM's response string (common logic for both providers)
+        extracted_verdict = "Inconclusive (Parsing Failed)"
+        extracted_reasoning = "Could not parse verdict and reasoning from LLM response."
+        verdict_found = False
+        reasoning_found = False
 
+        lines = llm_raw_response_content.strip().split('\n')
+        for line in lines:
+            if line.lower().startswith("verdict:"):
+                extracted_verdict = line.split(":", 1)[1].strip()
+                verdict_found = True
+            elif line.lower().startswith("reasoning:"):
+                extracted_reasoning = line.split(":", 1)[1].strip()
+                reasoning_found = True
 
-            return {
-                "status": "success",
-                "verdict": extracted_verdict,
-                "reasoning": extracted_reasoning,
-                "raw_eval_response": llm_raw_response_content,
-                "api_endpoint_used": str(client.base_url)
-            }
-        except openai.APIConnectionError as e:
-            return {"status": "error", "message": f"OpenAI API Connection Error during evaluation: {str(e)}"}
-        except openai.RateLimitError as e:
-            return {"status": "error", "message": f"OpenAI API Rate Limit Error during evaluation: {str(e)}"}
-        except openai.APIStatusError as e:
-            return {"status": "error", "message": f"OpenAI API Status Error during evaluation: {e.status_code} - {str(e.response)}"}
-        except Exception as e:
-            return {"status": "error", "message": f"An unexpected error occurred during LLM evaluation: {str(e)}"}
+        if not verdict_found and not reasoning_found and llm_raw_response_content:
+            extracted_reasoning = f"LLM did not follow formatting instructions. Raw response: {llm_raw_response_content}"
+
+        return {
+            "status": "success", # Status of the evaluation *attempt*
+            "verdict": extracted_verdict,
+            "reasoning": extracted_reasoning,
+            "raw_eval_response": llm_raw_response_content,
+            "api_endpoint_used": api_info_for_eval
+        }

@@ -5,46 +5,69 @@
 {% block content %}
     <h1>Configure Conversational AI Connection</h1>
 
-    {# Flashed messages are handled by base.html, so no need for specific block here unless different styling is desired #}
-    {# {% with messages = get_flashed_messages(with_categories=true) %} ... {% endwith %} #}
-
     <form method="POST" action="{{ url_for('web_interface.configure_ai') }}" class="form-section" style="padding: 1.5rem; background-color: #f9f9f9; border-radius: 5px;">
-        <div>
-            <label for="api_endpoint">API Endpoint URL (Optional - e.g., for proxies or non-OpenAI models):</label>
-            <input type="text" id="api_endpoint" name="api_endpoint" value="{{ current_endpoint or '' }}">
-            <small class="text-muted">Leave blank to use the default OpenAI API URL if using OpenAI directly.</small>
+
+        {# LLM Provider Selection #}
+        <div style="margin-bottom: 1.5rem;">
+            <label for="llm_provider">Select LLM Provider:</label>
+            <select name="llm_provider" id="llm_provider" class="form-control">
+                <option value="openai" {% if current_llm_provider == 'openai' %}selected{% endif %}>OpenAI</option>
+                <option value="google_gemini" {% if current_llm_provider == 'google_gemini' %}selected{% endif %}>Google Gemini</option>
+            </select>
+            <small class="text-muted">Select the primary LLM provider you will be using.</small>
         </div>
 
-        <div style="margin-top: 1rem;">
-            <label for="api_key">API Key (Required):</label>
-            <input type="password" id="api_key" name="api_key" {% if not api_key_is_present %}required{% endif %}>
-            {% if api_key_is_present %}
-                <small class="text-muted">An API key is currently stored. Enter a new key only if you want to change it. Otherwise, leave this field blank to keep the existing key.</small>
+        <hr style="margin: 1.5rem 0;">
+
+        {# OpenAI Configuration #}
+        <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">OpenAI Configuration</h2>
+        <div style="margin-bottom: 1rem;">
+            <label for="openai_api_endpoint">OpenAI API Endpoint URL (Optional - e.g., for proxies):</label>
+            <input type="text" id="openai_api_endpoint" name="openai_api_endpoint" value="{{ current_openai_api_endpoint or '' }}">
+            <small class="text-muted">Leave blank to use the default OpenAI API URL.</small>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label for="openai_api_key">OpenAI API Key:</label>
+            <input type="password" id="openai_api_key" name="openai_api_key">
+            {% if openai_api_key_is_present %}
+                <small class="text-muted">An OpenAI API key is currently stored. Enter a new key only if you want to change it. Otherwise, leave this field blank.</small>
             {% else %}
-                <small class="text-muted">Enter your API key for the conversational AI service.</small>
+                <small class="text-muted">Enter your OpenAI API key. Required if OpenAI is the selected provider.</small>
             {% endif %}
         </div>
 
-        <div style="margin-top: 1.5rem;">
-            <input type="submit" value="Save and Test Connection" class="button-primary">
+        <hr style="margin: 1.5rem 0;">
+
+        {# Google Gemini Configuration #}
+        <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">Google Gemini Configuration</h2>
+        <div style="margin-bottom: 1.5rem;">
+            <label for="gemini_api_key">Google Gemini API Key:</label>
+            <input type="password" id="gemini_api_key" name="gemini_api_key">
+            {% if gemini_api_key_is_present %}
+                <small class="text-muted">A Google Gemini API key is currently stored. Enter a new key only if you want to change it. Otherwise, leave this field blank.</small>
+            {% else %}
+                <small class="text-muted">Enter your Google Gemini API key. Required if Google Gemini is the selected provider.</small>
+            {% endif %}
+        </div>
+
+        <div style="margin-top: 2rem;">
+            <input type="submit" value="Save Configuration" class="button-primary">
         </div>
     </form>
 
-    {% if current_status %} {# 'current_status' here means the status from session after a POST #}
+    {% if current_status %}
     <div class="info-box" style="margin-top: 2rem; padding: 1rem; border-radius: 5px; background-color: #e9ecef;">
         <h2>Current Configuration Status:</h2>
-        {# This uses the flashed message categories for styling if possible, or defaults to a simple display #}
         <p class="alert alert-{{ 'success' if 'successful' in current_status.lower() or 'saved' in current_status.lower() else 'danger' if 'failed' in current_status.lower() else 'info' }}">
             {{ current_status }}
         </p>
-        {% if current_endpoint %}
-            <p><strong>Stored Endpoint:</strong> {{ current_endpoint }}</p>
+        <p><strong>Selected Provider:</strong> {{ current_llm_provider | capitalize }}</p>
+        {% if current_openai_api_endpoint %}
+            <p><strong>Stored OpenAI Endpoint:</strong> {{ current_openai_api_endpoint }}</p>
         {% endif %}
-        {% if api_key_is_present %}
-             <p><strong>API Key Status:</strong> A key is currently stored.</p>
-        {% else %}
-             <p><strong>API Key Status:</strong> No key is currently stored.</p>
-        {% endif %}
+        <p><strong>OpenAI Key Present:</strong> {{ 'Yes' if openai_api_key_is_present else 'No' }}</p>
+        <p><strong>Gemini Key Present:</strong> {{ 'Yes' if gemini_api_key_is_present else 'No' }}</p>
     </div>
     {% endif %}
 

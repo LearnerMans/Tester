@@ -11,6 +11,9 @@
             <p><strong>Description:</strong> {{ test_case.get('Description', 'N/A') }}</p>
             <p><strong>Expected Outcome for this test:</strong> {{ test_case.get('Expected Outcome', 'N/A') }}</p>
             <p><strong>Conversation ID:</strong> {{ current_conversation_id or 'N/A' }}</p>
+            {% if configured_provider_info %}
+            <p><small class="text-muted"><strong>LLM Provider:</strong> {{ configured_provider_info }}</small></p>
+            {% endif %}
         </div>
     {% else %}
         <div class="alert alert-danger">Test case details not available.</div>
